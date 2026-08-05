@@ -54,30 +54,39 @@ export const signIn = async ({ email, password }: signInProps) => {
 
 export const signUp = async ({ password, ...userData }: SignUpParams) => {
   const { email, firstName, lastName } = userData;
-  
+
   let newUserAccount;
 
   try {
     const { account, database } = await createAdminClient();
 
+    console.log("========== SIGN UP START ==========");
+
+    console.log("1. Creating Appwrite user...");
     newUserAccount = await account.create(
-      ID.unique(), 
-      email, 
-      password, 
+      ID.unique(),
+      email,
+      password,
       `${firstName} ${lastName}`
     );
+    console.log("✅ Appwrite user created");
 
-    if(!newUserAccount) throw new Error('Error creating user')
+    if (!newUserAccount) throw new Error("Error creating user");
 
+    console.log("2. Creating Dwolla customer...");
     const dwollaCustomerUrl = await createDwollaCustomer({
       ...userData,
-      type: 'personal'
-    })
+      type: "personal",
+    });
+    console.log("✅ Dwolla customer created:", dwollaCustomerUrl);
 
-    if(!dwollaCustomerUrl) throw new Error('Error creating Dwolla customer')
+    if (!dwollaCustomerUrl)
+      throw new Error("Error creating Dwolla customer");
 
-    const dwollaCustomerId = extractCustomerIdFromUrl(dwollaCustomerUrl);
+    const dwollaCustomerId =
+      extractCustomerIdFromUrl(dwollaCustomerUrl);
 
+    console.log("3. Creating database document...");
     const newUser = await database.createDocument(
       DATABASE_ID!,
       USER_COLLECTION_ID!,
@@ -86,11 +95,17 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
         ...userData,
         userId: newUserAccount.$id,
         dwollaCustomerId,
-        dwollaCustomerUrl
+        dwollaCustomerUrl,
       }
-    )
+    );
+    console.log("✅ Database document created");
 
-    const session = await account.createEmailPasswordSession(email, password);
+    console.log("4. Creating session...");
+    const session = await account.createEmailPasswordSession(
+      email,
+      password
+    );
+    console.log("✅ Session created");
 
     cookies().set("appwrite-session", session.secret, {
       path: "/",
@@ -99,11 +114,26 @@ export const signUp = async ({ password, ...userData }: SignUpParams) => {
       secure: true,
     });
 
+    console.log("========== SIGN UP SUCCESS ==========");
+
     return parseStringify(newUser);
-  } catch (error) {
-    console.error('Error', error);
+  } catch (error: any) {
+    console.error("========== SIGN UP ERROR ==========");
+    console.error(error);
+
+    if (error?.response) {
+      console.error("Response:", error.response);
+    }
+
+    if (error?.message) {
+      console.error("Message:", error.message);
+    }
+
+    console.error("===================================");
+
+    throw error;
   }
-}
+};
 
 export async function getLoggedInUser() {
   try {
